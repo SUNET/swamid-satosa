@@ -1,0 +1,165 @@
+from base64 import urlsafe_b64encode as base64_urlsafe_encode
+from base64 import urlsafe_b64decode as base64_urlsafe_decode
+from collections import defaultdict
+from json import dumps as json_dumps
+from json import loads as json_loads
+from logging import getLogger as get_logger
+from urllib.parse import urlencode
+
+from saml2.saml import NAMEID_FORMAT_PERSISTENT
+from saml2.authn_context.ppt import NAMESPACE as CLASS_REF_DEFAULT
+
+from satosa.exception import SATOSAError
+from satosa.internal import InternalData
+from satosa.micro_services.base import ResponseMicroService
+from satosa.response import Redirect
+from satosa.context import Context
+
+
+logger = get_logger(__name__)
+
+
+def convert_single_value_to_internal_attr(attr, value):
+    return (attr, [value])
+
+
+def convert_flat_format_value_to_internal_attr(separator, attr, value):
+    return (attr, value.split(separator))
+
+
+def convert_semicolon_flat_format_value_to_internal_attr(attr, value):
+    return convert_flat_format_value_to_internal_attr(';', attr, value)
+
+
+convert_input_to_internal_attr = defaultdict(
+    lambda: convert_single_value_to_internal_attr,
+    {
+        'assurance': convert_semicolon_flat_format_value_to_internal_attr,
+    },
+)
+
+
+def store_internal_data(state, key, value):
+    state[key] = {"internal_data": value}
+
+
+def restore_internal_data(state, key):
+    state = state.pop(key, {})
+    response_data = state.get("internal_data", {})
+    data = InternalData.from_dict(response_data)
+    return data
+
+
+def serialize_payload(payload):
+    serialized = json_dumps(payload)
+    encoded = serialized.encode("utf-8")
+    b64encoded = base64_urlsafe_encode(encoded)
+    encoded = b64encoded.decode("utf-8")
+    return encoded
+
+
+def deserialize_payload(payload):
+    try:
+        b64decoded = base64_urlsafe_decode(payload)
+        decoded = b64decoded.decode("utf-8")
+        deserialized = json_loads(decoded)
+    except Exception as e:
+        error_context = {
+            "message": "Cannot decode data to expected format",
+            "payload": payload,
+            "exception": str(e),
+        }
+        logger.error(error_context)
+        raise ActiveAttributeSelectionError(error_context)
+    else:
+        return deserialized
+
+
+class ProfilerError(SATOSAError):
+    pass
+
+
+class ProfilerAuthzError(ProfilerError):
+    pass
+
+
+class Profiler(ResponseMicroService):
+    def __init__(self, config, internal_attributes, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.profile_form_url = config.get("profile_form_url")
+        self.response_endpoint = config.get("response_endpoint")
+        self.requester_accr_state = config.get("requester_accr_state")
+        self.restricted_access_url = config.get("restricted_access_url")
+        self.authz_checks = config.get("authz_checks", [])
+
+    def register_endpoints(self):
+        url_map = [("^{}.*$".format(self.response_endpoint), self.handle_response)]
+        return url_map
+
+    def process(self, context, internal_data):
+        try:
+            self._authorize(context, internal_data)
+        except ProfilerAuthzError as e:
+            context.state.delete = True
+            logger.warning(e)
+            return Redirect(self.restricted_access_url)
+        except Exception as e:
+            context.state.delete = True
+            logger.error(e)
+            return Redirect(self.restricted_access_url)
+        else:
+            store_internal_data(context.state, self.name, internal_data.to_dict())
+            requester_accr = context.state.get(self.requester_accr_state)
+            query_string_params = {}
+            if requester_accr:
+                query_string_params["authncontext"] = requester_accr[0]
+            query_string = urlencode(query_string_params)
+            return Redirect(self.profile_form_url + f'?{query_string}')
+
+    def handle_response(self, context):
+        try:
+            internal_data = restore_internal_data(context.state, self.name)
+            self._authorize(context, internal_data)
+        except ProfilerAuthzError as e:
+            context.state.delete = True
+            logger.warning(e)
+            return Redirect(self.restricted_access_url)
+        except Exception as e:
+            context.state.delete = True
+            logger.error(e)
+            return Redirect(self.restricted_access_url)
+        else:
+            store_internal_data(context.state, self.name, internal_data.to_dict())
+            return self._handle_response(context, internal_data)
+
+    def _authorize(self, context, internal_data):
+        is_authorized = all(
+            context.state.get(check)
+            for check in self.authz_checks
+        )
+        if not is_authorized:
+            error_context = {
+                'message': 'User is not authorized to access this service.',
+                'is_authorized': is_authorized,
+                'authz_checks': authz_checks,
+            }
+            raise ProfilerAuthzError(error_context)
+
+        return True
+
+    def _handle_response(self, context, internal_data):
+        authn_context = context.get_decoration(Context.KEY_AUTHN_CONTEXT_CLASS_REF)
+
+        attributes = dict(
+            convert_input_to_internal_attr[attr](attr, value)
+            for attr, value in context.request.items()
+        )
+        acr = attributes.get('authncontext', CLASS_REF_DEFAULT)
+
+        internal_data.auth_info.auth_class_ref = next(iter(acr), None)
+        internal_data.attributes = attributes
+        internal_data.subject_id = context.request.get("principal_name")
+        if internal_data.subject_id:
+            internal_data.subject_type = NAMEID_FORMAT_PERSISTENT
+
+        return super().process(context, internal_data)
