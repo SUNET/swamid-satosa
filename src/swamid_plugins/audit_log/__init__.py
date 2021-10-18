@@ -38,10 +38,10 @@ class AuditLogger(ResponseMicroService):
             "timestamp": datetime.now().isoformat(),
             "ip_address": context.http_headers.get("HTTP_X_REAL_IP"),
             "issuer_entity_id": issuer_internal_data.auth_info.issuer,
-            "issuer_attributes": issuer_internal_data.attributes.to_dict(),
+            "issuer_attributes": issuer_internal_data.attributes,
             "issuer_accr": issuer_internal_data.auth_info.auth_class_ref,
             "service_entity_id": internal_data.requester,
-            "service_attributes": internal_data.attributes.to_dict(),
+            "service_attributes": internal_data.attributes,
             "service_accr": internal_data.auth_info.auth_class_ref,
             "session_id": context.state.session_id,
         }
