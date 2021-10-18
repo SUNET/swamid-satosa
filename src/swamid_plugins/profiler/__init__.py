@@ -39,6 +39,7 @@ class Profiler(ResponseMicroService):
         self.profile_form_url = config.get("profile_form_url")
         self.response_endpoint = config.get("response_endpoint")
         self.requester_accr_state = config.get("requester_accr_state")
+        self.data_from_idp_state = config.get("data_from_idp_state")
         self.authz_checks = config.get("authz_checks", [])
 
         templates_dir_path = config["templates_dir_path"]
@@ -64,8 +65,12 @@ class Profiler(ResponseMicroService):
             content = template.render()
             return ServiceErrorResponse(content)
 
-        store_internal_data(context.state, self.name, internal_data.to_dict())
+        store_internal_data(
+            context.state, self.data_from_idp_state, internal_data.to_dict()
+        )
         requester_accr = context.state.get(self.requester_accr_state)
+
+        # XXX TODO render with jinja2
         query_string_params = {}
         if requester_accr:
             query_string_params["authncontext"] = requester_accr[0]
@@ -74,7 +79,9 @@ class Profiler(ResponseMicroService):
 
     def handle_response(self, context):
         try:
-            internal_data = restore_internal_data(context.state, self.name)
+            internal_data = restore_internal_data(
+                context.state, self.data_from_idp_state
+            )
             self._authorize(context)
         except ProfilerAuthzError as e:
             context.state.delete = True
@@ -89,7 +96,9 @@ class Profiler(ResponseMicroService):
             content = template.render()
             return ServiceErrorResponse(content)
 
-        store_internal_data(context.state, self.name, internal_data.to_dict())
+        store_internal_data(
+            context.state, self.data_from_idp_state, internal_data.to_dict()
+        )
         return self._handle_response(context, internal_data)
 
     def _authorize(self, context):
