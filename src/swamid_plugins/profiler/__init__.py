@@ -6,6 +6,10 @@ from json import loads as json_loads
 from logging import getLogger as get_logger
 from urllib.parse import urlencode
 
+from jinja2 import Environment
+from jinja2 import FileSystemLoader
+from jinja2 import select_autoescape
+
 from saml2.saml import NAMEID_FORMAT_PERSISTENT
 from saml2.authn_context.ppt import NAMESPACE as CLASS_REF_DEFAULT
 
@@ -13,10 +17,142 @@ from satosa.exception import SATOSAError
 from satosa.internal import InternalData
 from satosa.micro_services.base import ResponseMicroService
 from satosa.response import Redirect
+from satosa.response import Unauthorized as UnauthorizedResponse
+from satosa.response import ServiceError as ServiceErrorResponse
 from satosa.context import Context
 
 
 logger = get_logger(__name__)
+
+
+class ProfilerError(SATOSAError):
+    pass
+
+
+class ProfilerAuthzError(ProfilerError):
+    pass
+
+
+class Profiler(ResponseMicroService):
+    def __init__(self, config, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.profile_form_url = config.get("profile_form_url")
+        self.response_endpoint = config.get("response_endpoint")
+        self.requester_accr_state = config.get("requester_accr_state")
+        self.authz_checks = config.get("authz_checks", [])
+
+        templates_dir_path = config["templates_dir_path"]
+        self.tpl_env = Environment(loader=FileSystemLoader(templates_dir_path), autoescape=select_autoescape())
+
+    def register_endpoints(self):
+        url_map = [("^{}.*$".format(self.response_endpoint), self.handle_response)]
+        return url_map
+
+    def process(self, context, internal_data):
+        requester = internal_data.requester
+        requester_md = internal_data.metadata.get(requester)
+        issuer = internal_data.auth_info.issuer
+        issuer_md = internal_data.metadata.get(issuer)
+
+        try:
+            self._authorize(context)
+        except ProfilerAuthzError as e:
+            context.state.delete = True
+            logger.warning(e)
+            template = self.tpl_env.get_template("error-access.html.jinja2")
+            content = template.render(
+                attrs=internal_data.attributes,
+                requester=requester,
+                requester_md=requester_md,
+                issuer=issuer,
+                issuer_md=issuer_md,
+            )
+            return UnauthorizedResponse(content)
+        except Exception as e:
+            context.state.delete = True
+            logger.error(e)
+            template = self.tpl_env.get_template("error.html.jinja2")
+            content = template.render()
+            return ServiceErrorResponse(content)
+
+        store_internal_data(context.state, self.name, internal_data.to_dict())
+        requester_accr = context.state.get(self.requester_accr_state)
+        query_string_params = {}
+        if requester_accr:
+            query_string_params["authncontext"] = requester_accr[0]
+        query_string = urlencode(query_string_params)
+        return Redirect(self.profile_form_url + f'?{query_string}')
+
+    def handle_response(self, context):
+        try:
+            internal_data = restore_internal_data(context.state, self.name)
+        except Exception as e:
+            context.state.delete = True
+            logger.error(e)
+            template = self.tpl_env.get_template("error.html.jinja2")
+            content = template.render()
+            return ServiceErrorResponse(content)
+
+        requester = internal_data.requester
+        requester_md = internal_data.metadata.get(requester)
+        issuer = internal_data.auth_info.issuer
+        issuer_md = internal_data.metadata.get(issuer)
+
+        try:
+            self._authorize(context)
+        except ProfilerAuthzError as e:
+            context.state.delete = True
+            logger.warning(e)
+            template = self.tpl_env.get_template("error-access.html.jinja2")
+            content = template.render(
+                attrs=internal_data.attributes,
+                requester=requester,
+                requester_md=requester_md,
+                issuer=issuer,
+                issuer_md=issuer_md,
+            )
+            return UnauthorizedResponse(content)
+        except Exception as e:
+            context.state.delete = True
+            logger.error(e)
+            template = self.tpl_env.get_template("error.html.jinja2")
+            content = template.render()
+            return ServiceErrorResponse(content)
+
+        store_internal_data(context.state, self.name, internal_data.to_dict())
+        return self._handle_response(context, internal_data)
+
+    def _authorize(self, context):
+        is_authorized = all(
+            context.state.get(check)
+            for check in self.authz_checks
+        )
+        if not is_authorized:
+            error_context = {
+                'message': 'User is not authorized to access this service.',
+                'is_authorized': is_authorized,
+                'authz_checks': self.authz_checks,
+            }
+            raise ProfilerAuthzError(error_context)
+
+        return True
+
+    def _handle_response(self, context, internal_data):
+        authn_context = context.get_decoration(Context.KEY_AUTHN_CONTEXT_CLASS_REF)
+
+        attributes = dict(
+            convert_input_to_internal_attr[attr](attr, value)
+            for attr, value in context.request.items()
+        )
+        acr = attributes.get('authncontext', CLASS_REF_DEFAULT)
+
+        internal_data.auth_info.auth_class_ref = next(iter(acr), None)
+        internal_data.attributes = attributes
+        internal_data.subject_id = context.request.get("principal_name")
+        if internal_data.subject_id:
+            internal_data.subject_type = NAMEID_FORMAT_PERSISTENT
+
+        return super().process(context, internal_data)
 
 
 def convert_single_value_to_internal_attr(attr, value):
@@ -70,96 +206,6 @@ def deserialize_payload(payload):
             "exception": str(e),
         }
         logger.error(error_context)
-        raise ActiveAttributeSelectionError(error_context)
+        raise ProfilerError(error_context)
     else:
         return deserialized
-
-
-class ProfilerError(SATOSAError):
-    pass
-
-
-class ProfilerAuthzError(ProfilerError):
-    pass
-
-
-class Profiler(ResponseMicroService):
-    def __init__(self, config, internal_attributes, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.profile_form_url = config.get("profile_form_url")
-        self.response_endpoint = config.get("response_endpoint")
-        self.requester_accr_state = config.get("requester_accr_state")
-        self.restricted_access_url = config.get("restricted_access_url")
-        self.authz_checks = config.get("authz_checks", [])
-
-    def register_endpoints(self):
-        url_map = [("^{}.*$".format(self.response_endpoint), self.handle_response)]
-        return url_map
-
-    def process(self, context, internal_data):
-        try:
-            self._authorize(context, internal_data)
-        except ProfilerAuthzError as e:
-            context.state.delete = True
-            logger.warning(e)
-            return Redirect(self.restricted_access_url)
-        except Exception as e:
-            context.state.delete = True
-            logger.error(e)
-            return Redirect(self.restricted_access_url)
-        else:
-            store_internal_data(context.state, self.name, internal_data.to_dict())
-            requester_accr = context.state.get(self.requester_accr_state)
-            query_string_params = {}
-            if requester_accr:
-                query_string_params["authncontext"] = requester_accr[0]
-            query_string = urlencode(query_string_params)
-            return Redirect(self.profile_form_url + f'?{query_string}')
-
-    def handle_response(self, context):
-        try:
-            internal_data = restore_internal_data(context.state, self.name)
-            self._authorize(context, internal_data)
-        except ProfilerAuthzError as e:
-            context.state.delete = True
-            logger.warning(e)
-            return Redirect(self.restricted_access_url)
-        except Exception as e:
-            context.state.delete = True
-            logger.error(e)
-            return Redirect(self.restricted_access_url)
-        else:
-            store_internal_data(context.state, self.name, internal_data.to_dict())
-            return self._handle_response(context, internal_data)
-
-    def _authorize(self, context, internal_data):
-        is_authorized = all(
-            context.state.get(check)
-            for check in self.authz_checks
-        )
-        if not is_authorized:
-            error_context = {
-                'message': 'User is not authorized to access this service.',
-                'is_authorized': is_authorized,
-                'authz_checks': authz_checks,
-            }
-            raise ProfilerAuthzError(error_context)
-
-        return True
-
-    def _handle_response(self, context, internal_data):
-        authn_context = context.get_decoration(Context.KEY_AUTHN_CONTEXT_CLASS_REF)
-
-        attributes = dict(
-            convert_input_to_internal_attr[attr](attr, value)
-            for attr, value in context.request.items()
-        )
-        acr = attributes.get('authncontext', CLASS_REF_DEFAULT)
-
-        internal_data.auth_info.auth_class_ref = next(iter(acr), None)
-        internal_data.attributes = attributes
-        internal_data.subject_id = context.request.get("principal_name")
-        if internal_data.subject_id:
-            internal_data.subject_type = NAMEID_FORMAT_PERSISTENT
-
-        return super().process(context, internal_data)

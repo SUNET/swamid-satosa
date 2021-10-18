@@ -1,12 +1,15 @@
 from logging import getLogger as get_logger
 
+from jinja2 import Environment
+from jinja2 import FileSystemLoader
+from jinja2 import select_autoescape
+
+from satosa.context import Context
+from satosa.exception import SATOSAError
+from satosa.internal import InternalData
 from satosa.micro_services.base import RequestMicroService
 from satosa.micro_services.base import ResponseMicroService
-from satosa.response import Redirect
-from satosa.context import Context
-from satosa.internal import InternalData
-
-from satosa.exception import SATOSAError
+from satosa.response import Unauthorized as UnauthorizedResponse
 
 
 logger = get_logger(__name__)
@@ -28,10 +31,12 @@ class AssuranceRequirementsPerServiceChecker(RequestMicroService, ResponseMicroS
     def __init__(self, config, internal_attributes, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.state_result = config["state_result"]
-        self.error_url = config["error_url"]
         self.required_assurance_per_service = config["required_assurance_per_service"]
         self.required_assurance_default = self.required_assurance_per_service["default"]
         self.assurance_attribute = config["assurance_attribute"]
+
+        templates_dir_path = config["templates_dir_path"]
+        self.tpl_env = Environment(loader=FileSystemLoader(templates_dir_path), autoescape=select_autoescape())
 
     def process(self, context: Context, internal_data: InternalData):
         is_request = bool(context.target_frontend)
@@ -42,7 +47,21 @@ class AssuranceRequirementsPerServiceChecker(RequestMicroService, ResponseMicroS
             context.state[self.state_result] = False
             context.state.delete = True
             logger.warning(e)
-            return Redirect(self.error_url)
+
+            requester = internal_data.requester
+            requester_md = internal_data.metadata.get(requester)
+            issuer = None if is_request else internal_data.auth_info.issuer
+            issuer_md = {} if is_request else internal_data.metadata.get(issuer)
+
+            template = self.tpl_env.get_template("error-assurance.html.jinja2")
+            content = template.render(
+                attrs=internal_data.attributes,
+                requester=requester,
+                requester_md=requester_md,
+                issuer=issuer,
+                issuer_md=issuer_md,
+            )
+            return UnauthorizedResponse(content)
 
     def process_request(self, context: Context, internal_data: InternalData):
         requester = internal_data.requester
