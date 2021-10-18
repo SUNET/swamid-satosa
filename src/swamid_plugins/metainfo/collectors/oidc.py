@@ -7,6 +7,7 @@ def collect_entity_metadata(mdstore, entity_id):
         "supported_entity_categories": get_supported_entity_categories(mdstore, entity_id),
         "assurance_certifications": get_assurance_certifications(mdstore, entity_id),
         "registration_info": get_registration_info(mdstore, entity_id),
+        "error_url": get_error_url(mdstore, entity_id),
     }
     return metadata
 
@@ -88,3 +89,8 @@ def get_assurance_certifications(mdstore, entity_id):
 def get_registration_info(mdstore, entity_id):
     registration_info = {}
     return registration_info
+
+
+def get_error_url(mdstore, entity_id):
+    error_url = mdstore.get("error_url", [])
+    return error_url
