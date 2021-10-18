@@ -49,24 +49,13 @@ class Profiler(ResponseMicroService):
         return url_map
 
     def process(self, context, internal_data):
-        requester = internal_data.requester
-        requester_md = internal_data.metadata.get(requester)
-        issuer = internal_data.auth_info.issuer
-        issuer_md = internal_data.metadata.get(issuer)
-
         try:
             self._authorize(context)
         except ProfilerAuthzError as e:
             context.state.delete = True
             logger.warning(e)
-            template = self.tpl_env.get_template("error-access.html.jinja2")
-            content = template.render(
-                attrs=internal_data.attributes,
-                requester=requester,
-                requester_md=requester_md,
-                issuer=issuer,
-                issuer_md=issuer_md,
-            )
+            template = self.tpl_env.get_template("error-profiler-access.html.jinja2")
+            content = template.render()
             return UnauthorizedResponse(content)
         except Exception as e:
             context.state.delete = True
@@ -86,31 +75,12 @@ class Profiler(ResponseMicroService):
     def handle_response(self, context):
         try:
             internal_data = restore_internal_data(context.state, self.name)
-        except Exception as e:
-            context.state.delete = True
-            logger.error(e)
-            template = self.tpl_env.get_template("error.html.jinja2")
-            content = template.render()
-            return ServiceErrorResponse(content)
-
-        requester = internal_data.requester
-        requester_md = internal_data.metadata.get(requester)
-        issuer = internal_data.auth_info.issuer
-        issuer_md = internal_data.metadata.get(issuer)
-
-        try:
             self._authorize(context)
         except ProfilerAuthzError as e:
             context.state.delete = True
             logger.warning(e)
-            template = self.tpl_env.get_template("error-access.html.jinja2")
-            content = template.render(
-                attrs=internal_data.attributes,
-                requester=requester,
-                requester_md=requester_md,
-                issuer=issuer,
-                issuer_md=issuer_md,
-            )
+            template = self.tpl_env.get_template("error-profiler-access.html.jinja2")
+            content = template.render()
             return UnauthorizedResponse(content)
         except Exception as e:
             context.state.delete = True
