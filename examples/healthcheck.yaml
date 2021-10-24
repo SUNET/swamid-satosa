@@ -1,0 +1,2 @@
+module: sunet_plugins.healthcheck.HealthCheck
+name: HealthCheck
