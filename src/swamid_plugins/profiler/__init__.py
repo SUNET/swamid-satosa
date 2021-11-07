@@ -117,15 +117,14 @@ class Profiler(ResponseMicroService):
         return True
 
     def _handle_response(self, context, internal_data):
-        authn_context = context.get_decoration(Context.KEY_AUTHN_CONTEXT_CLASS_REF)
-
+        issuer_acr = context.get_decoration(Context.KEY_AUTHN_CONTEXT_CLASS_REF)
+        acr = context.request.get('authncontext') or issuer_acr or CLASS_REF_DEFAULT
         attributes = dict(
             convert_input_to_internal_attr[attr](attr, value)
             for attr, value in context.request.items()
         )
-        acr = attributes.get('authncontext', CLASS_REF_DEFAULT)
 
-        internal_data.auth_info.auth_class_ref = next(iter(acr), None)
+        internal_data.auth_info.auth_class_ref = acr
         internal_data.attributes = attributes
         internal_data.subject_id = context.request.get("principal_name")
         if internal_data.subject_id:
