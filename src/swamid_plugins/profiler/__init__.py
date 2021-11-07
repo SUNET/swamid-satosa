@@ -34,8 +34,9 @@ class ProfilerAuthzError(ProfilerError):
 
 
 class Profiler(ResponseMicroService):
-    def __init__(self, config, *args, **kwargs):
+    def __init__(self, config, internal_attributes, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        self.internal_attributes = internal_attributes["attributes"]
         self.profile_form_url = config.get("profile_form_url")
         self.response_endpoint = config.get("response_endpoint")
         self.requester_accr_state = config.get("requester_accr_state")
@@ -122,6 +123,7 @@ class Profiler(ResponseMicroService):
         attributes = dict(
             convert_input_to_internal_attr[attr](attr, value)
             for attr, value in context.request.items()
+            if attr in self.internal_attributes
         )
 
         internal_data.auth_info.auth_class_ref = acr
