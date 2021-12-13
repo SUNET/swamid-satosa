@@ -11,7 +11,6 @@ from jinja2 import FileSystemLoader
 from jinja2 import select_autoescape
 
 from saml2.saml import NAMEID_FORMAT_PERSISTENT
-from saml2.authn_context.ppt import NAMESPACE as CLASS_REF_DEFAULT
 
 from satosa.exception import SATOSAError
 from satosa.internal import InternalData
@@ -19,7 +18,6 @@ from satosa.micro_services.base import ResponseMicroService
 from satosa.response import Redirect
 from satosa.response import Unauthorized as UnauthorizedResponse
 from satosa.response import ServiceError as ServiceErrorResponse
-from satosa.context import Context
 
 
 logger = get_logger(__name__)
@@ -37,6 +35,10 @@ class Profiler(ResponseMicroService):
     def __init__(self, config, internal_attributes, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.internal_attributes = internal_attributes["attributes"]
+        self.allowed_to_change_accr = config["allowed"].get("accr")
+        self.allowed_to_change_eppn = config["allowed"].get("eppn")
+        self.allowed_attributes = config["allowed"].get("attributes") or []
+        self.attributes_strategy = config["allowed"].get("attributes_strategy", "replace_discard")
         self.profile_form_url = config.get("profile_form_url")
         self.response_endpoint = config.get("response_endpoint")
         self.requester_accr_state = config.get("requester_accr_state")
@@ -118,21 +120,63 @@ class Profiler(ResponseMicroService):
         return True
 
     def _handle_response(self, context, internal_data):
-        issuer_acr = context.get_decoration(Context.KEY_AUTHN_CONTEXT_CLASS_REF)
-        acr = context.request.get('authncontext') or issuer_acr or CLASS_REF_DEFAULT
-        attributes = dict(
-            convert_input_to_internal_attr[attr](attr, value)
-            for attr, value in context.request.items()
-            if attr in self.internal_attributes
-        )
+        if self.allowed_to_change_accr:
+            internal_data.auth_info.auth_class_ref = (
+                context.request.get('authncontext')
+                or internal_data.auth_info.auth_class_ref
+            )
 
-        internal_data.auth_info.auth_class_ref = acr
-        internal_data.attributes = attributes
-        internal_data.subject_id = context.request.get("principal_name")
-        if internal_data.subject_id:
+        if self.allowed_attributes:
+            new_attributes = dict(
+                convert_input_to_internal_attr[attr](attr, value)
+                for attr, value in context.request.items()
+                if attr in self.allowed_attributes
+            )
+            fn_attributes_strategy = attributes_strategy[self.attributes_strategy]
+            internal_data.attributes = fn_attributes_strategy(
+                new_attributes, internal_data.attributes
+            )
+
+        if self.allowed_to_change_eppn:
+            internal_data.subject_id = (
+                context.request.get("principal_name")
+                or internal_data.subject_id
+            )
             internal_data.subject_type = NAMEID_FORMAT_PERSISTENT
 
         return super().process(context, internal_data)
+
+
+def replace_discard(new_attrs, issuer_attrs):
+    return new_attrs
+
+
+def replace_keep(new_attrs, issuer_attrs):
+    return {**issuer_attrs, **new_attrs}
+
+
+def merge_discard(new_attrs, issuer_attrs):
+    merged_attributes = {
+        attr: list(set(*issuer_attrs.get(attr, []), *values))
+        for attr, values in new_attrs.items()
+    }
+    return merged_attributes
+
+
+def merge_keep(new_attrs, issuer_attrs):
+    merged_attributes = {
+        attr: list(set(*issuer_attrs.get(attr, []), *values))
+        for attr, values in new_attrs.items()
+    }
+    return {**issuer_attrs, **merged_attributes}
+
+
+attributes_strategy = {
+    "replace_discard": replace_discard,
+    "replace_keep": replace_keep,
+    "merge_discard": merge_discard,
+    "merge_keep": merge_keep,
+}
 
 
 def convert_single_value_to_internal_attr(attr, value):
