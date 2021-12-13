@@ -29,7 +29,7 @@ class EPPNMapper(ResponseMicroService):
         user_ids = [
             user_id
             for eppn in eppns
-            for user_id in self.eppn_to_user_id.get(eppn, [])
+            for user_id in [self.eppn_to_user_id.get(eppn)]
             if user_id
         ]
 
