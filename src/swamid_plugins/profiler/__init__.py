@@ -36,7 +36,7 @@ class Profiler(ResponseMicroService):
         super().__init__(*args, **kwargs)
         self.internal_attributes = internal_attributes["attributes"]
         self.allowed_to_change_accr = config["allowed"].get("accr")
-        self.allowed_to_change_eppn = config["allowed"].get("eppn")
+        self.allowed_to_change_name_id = config["allowed"].get("name_id")
         self.allowed_attributes = config["allowed"].get("attributes") or []
         self.attributes_strategy = config["allowed"].get("attributes_strategy", "replace_discard")
         self.profile_form_url = config.get("profile_form_url")
@@ -137,7 +137,7 @@ class Profiler(ResponseMicroService):
                 new_attributes, internal_data.attributes
             )
 
-        if self.allowed_to_change_eppn:
+        if self.allowed_to_change_name_id:
             internal_data.subject_id = (
                 context.request.get("principal_name")
                 or internal_data.subject_id
