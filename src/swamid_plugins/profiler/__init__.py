@@ -195,6 +195,7 @@ convert_input_to_internal_attr = defaultdict(
     lambda: convert_single_value_to_internal_attr,
     {
         'assurance': convert_semicolon_flat_format_value_to_internal_attr,
+        'entitlement': convert_semicolon_flat_format_value_to_internal_attr,
     },
 )
 
