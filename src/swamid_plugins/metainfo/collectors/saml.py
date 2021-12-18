@@ -61,5 +61,5 @@ def get_error_url(mdstore, entity_id):
 
 
 def get_sbibmd_scopes(mdstore, entity_id):
-    scopes = mdstore.sbibmd_scopes(entity_id)
+    scopes = list(mdstore.sbibmd_scopes(entity_id))
     return scopes
