@@ -7,6 +7,7 @@ def collect_entity_metadata(mdstore, entity_id):
         "assurance_certifications": get_assurance_certifications(mdstore, entity_id),
         "registration_info": get_registration_info(mdstore, entity_id),
         "error_url": get_error_url(mdstore, entity_id),
+        "sbibmd_scopes": get_sbibmd_scopes(mdstore, entity_id),
     }
     return metadata
 
@@ -57,3 +58,8 @@ def get_error_url(mdstore, entity_id):
         for idpsso in mdstore[entity_id].get('idpsso_descriptor', [])
     ]
     return error_url
+
+
+def get_sbibmd_scopes(mdstore, entity_id):
+    scopes = mdstore.sbibmd_scopes(entity_id)
+    return scopes

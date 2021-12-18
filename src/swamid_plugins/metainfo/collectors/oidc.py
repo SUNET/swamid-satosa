@@ -8,6 +8,7 @@ def collect_entity_metadata(mdstore, entity_id):
         "assurance_certifications": get_assurance_certifications(mdstore, entity_id),
         "registration_info": get_registration_info(mdstore, entity_id),
         "error_url": get_error_url(mdstore, entity_id),
+        "sbibmd_scopes": get_sbibmd_scopes(mdstore, entity_id),
     }
     return metadata
 
@@ -94,3 +95,8 @@ def get_registration_info(mdstore, entity_id):
 def get_error_url(mdstore, entity_id):
     error_url = mdstore.get("error_url", [])
     return error_url
+
+
+def get_sbibmd_scopes(mdstore, entity_id):
+    scopes = mdstore.get("sbibmd_scopes", [])
+    return scopes
