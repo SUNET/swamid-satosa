@@ -11,7 +11,7 @@ class ScopeFilter(ResponseMicroService):
     def process(self, context, internal_data):
         issuer = internal_data.auth_info.issuer
         issuer_md = internal_data.metadata[issuer]
-        allowed_scopes = issuer_md.get("get_sbibmd_scopes", [])
+        allowed_scopes = issuer_md.get("sbibmd_scopes", [])
 
         for attribute in self.filter_attributes:
             values = internal_data.attributes.get(attribute) or []
