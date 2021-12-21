@@ -25,7 +25,10 @@ class ScopeFilter(ResponseMicroService):
                     for match in [scope_matchers[allowed_scope["regexp"]]]
                 )
             ]
-            internal_data.attributes[attribute] = new_values
+            if not new_values:
+                del internal_data.attributes[attribute]
+            else:
+                internal_data.attributes[attribute] = new_values
 
         return super().process(context, internal_data)
 
