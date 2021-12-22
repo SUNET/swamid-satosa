@@ -26,7 +26,7 @@ class ScopeFilter(ResponseMicroService):
                 )
             ]
             if not new_values:
-                del internal_data.attributes[attribute]
+                internal_data.attributes.pop(attribute, None)
             else:
                 internal_data.attributes[attribute] = new_values
 
