@@ -1,2 +1,2 @@
-module: sunet_plugins.healthcheck.HealthCheck
+module: swamid_plugins.healthcheck.HealthCheck
 name: HealthCheck
