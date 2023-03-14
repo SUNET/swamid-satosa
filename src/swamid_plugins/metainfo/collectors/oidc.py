@@ -1,6 +1,7 @@
 def collect_entity_metadata(mdstore, entity_id):
     metadata = {
         "display_name": get_display_name(mdstore, entity_id),
+        "logo": get_logo(mdstore, entity_id),
         "privacy_statement": get_privacy_statement(mdstore, entity_id),
         "contacts": get_contacts(mdstore, entity_id),
         "entity_categories": get_entity_categories(mdstore, entity_id),
@@ -16,6 +17,11 @@ def collect_entity_metadata(mdstore, entity_id):
 def get_display_name(mdstore, entity_id):
     display_name = mdstore.get("client_name")
     return display_name
+
+
+def get_logo(mdstore, entity_id):
+    logo = mdstore.get("logo_uri")
+    return logo
 
 
 def get_privacy_statement(mdstore, entity_id):
