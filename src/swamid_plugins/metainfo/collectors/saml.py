@@ -63,6 +63,7 @@ def get_error_url(mdstore, entity_id):
     error_url = [
         idpsso['error_url']
         for idpsso in mdstore[entity_id].get('idpsso_descriptor', [])
+        if 'error_url' in idpsso
     ]
     return error_url
 
