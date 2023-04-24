@@ -1,11 +1,13 @@
-def collect_entity_metadata(mdstore, entity_id):
+def collect_entity_metadata(mdstore, entity_id, langs):
     metadata = {
-        "display_name": get_display_name(mdstore, entity_id),
+        "display_names": get_display_names_lang(mdstore, entity_id, langs),
         "logo": get_logo(mdstore, entity_id),
         "privacy_statement": get_privacy_statement(mdstore, entity_id),
         "contacts": get_contacts(mdstore, entity_id),
         "entity_categories": get_entity_categories(mdstore, entity_id),
-        "supported_entity_categories": get_supported_entity_categories(mdstore, entity_id),
+        "supported_entity_categories": get_supported_entity_categories(
+            mdstore, entity_id
+        ),
         "assurance_certifications": get_assurance_certifications(mdstore, entity_id),
         "registration_info": get_registration_info(mdstore, entity_id),
         "error_url": get_error_url(mdstore, entity_id),
@@ -14,14 +16,25 @@ def collect_entity_metadata(mdstore, entity_id):
     return metadata
 
 
-def get_display_name(mdstore, entity_id):
-    display_name = mdstore.get("client_name")
-    return display_name
+def get_display_names_lang(mdstore, entity_id, langs=None):
+    if not langs:
+        langs = ["en"]
+    display_names = []
+    for lang in langs:
+        if mdstore.get("client_name#" + lang, None):
+            display_names.append(
+                {"text": mdstore.get("client_name#" + lang), "lang": lang}
+            )
+    return display_names
 
 
 def get_logo(mdstore, entity_id):
+    ret_logo = []
     logo = mdstore.get("logo_uri")
-    return logo
+    width = mdstore.get("logo_width")
+    height = mdstore.get("logo_height")
+    ret_logo.append({"text": logo, "height": height, "width": width})
+    return ret_logo
 
 
 def get_privacy_statement(mdstore, entity_id):
@@ -39,7 +52,7 @@ def get_contacts(mdstore, entity_id):
                     "mailto:{contact}".format(contact=email)
                     for email in (mdstore.get("contacts") or [])
                 ],
-                "given_name": ""
+                "given_name": "",
             },
             {
                 "contact_type": "technical",
@@ -47,7 +60,7 @@ def get_contacts(mdstore, entity_id):
                     "mailto:{contact}".format(contact=email)
                     for email in (mdstore.get("technical_contacts") or [])
                 ],
-                "given_name": ""
+                "given_name": "",
             },
             {
                 "contact_type": "security",
@@ -55,7 +68,7 @@ def get_contacts(mdstore, entity_id):
                     "mailto:{contact}".format(contact=email)
                     for email in (mdstore.get("security_contacts") or [])
                 ],
-                "given_name": ""
+                "given_name": "",
             },
         ]
         if contact["email_address"]
@@ -65,8 +78,8 @@ def get_contacts(mdstore, entity_id):
 
 def get_entity_categories(mdstore, entity_id):
     entity_categories_translation = {
-        'research_and_scholarship': 'http://refeds.org/category/research-and-scholarship',
-        'geant_coco': 'http://www.geant.net/uri/dataprotection-code-of-conduct/v1',
+        "research_and_scholarship": "http://refeds.org/category/research-and-scholarship",
+        "geant_coco": "http://www.geant.net/uri/dataprotection-code-of-conduct/v1",
     }
     entity_categories = [
         category
@@ -83,7 +96,7 @@ def get_supported_entity_categories(mdstore, entity_id):
 
 def get_assurance_certifications(mdstore, entity_id):
     assurance_certifications_translations = {
-        'sirtfi': 'https://refeds.org/sirtfi',
+        "sirtfi": "https://refeds.org/sirtfi",
     }
     assurance_certifications = [
         certification
