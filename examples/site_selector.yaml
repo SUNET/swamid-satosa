@@ -1,0 +1,15 @@
+module: swamid_plugins.site_selector.SiteSelector
+name: SiteSelector
+config:
+  access_rules:
+    "<service-identifier-1>":
+      - attribute: "eppn"
+        match: "<regex>"
+      - attribute: "uid"
+        match: "<regex>"
+    "<service-identifier-2>":
+      - ...
+    # fallback rules, when no specific rules are set for a service
+    "":
+      - attribute: "eppn"
+        match: "<regex>"
