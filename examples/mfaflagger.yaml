@@ -1,0 +1,16 @@
+module: swamid_plugins.mfa.MFAFlagger
+name: MFAFlagger
+config:
+  # the name of the attribute that signals that MFA was performed
+  mfa_attr_name: "mfa_verified"
+
+  # the value to set this attribute to when MFA was performed
+  mfa_attr_value: "1"
+
+  # the list of AuthnContextClassRefs that signal MFA
+  mfa_accepted_accrs:
+    - "https://refeds.org/profile/mfa"
+
+  # the list of IdP entityIDs that are assumed to always perform MFA
+  mfa_idps:
+    - "https://idp.sunet.se/idp"
