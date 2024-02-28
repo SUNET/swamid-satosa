@@ -43,7 +43,7 @@ class SiteSelector(ResponseMicroService):
             raise Error(error_context)
         query_string = urlencode({
             "user_id": internal_data.subject_id,
-            "displayname": (internal_data.attribute.get("displayname") or ["Unknown"])[0],
+            "displayname": (internal_data.attributes.get("displayname") or ["Unknown"])[0],
             "timestamp": internal_data.auth_info.timestamp,
             "issuer": internal_data.auth_info.issuer,
             "service": service_id,
