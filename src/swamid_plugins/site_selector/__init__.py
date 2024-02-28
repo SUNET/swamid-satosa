@@ -1,3 +1,5 @@
+import base64
+import json
 from re import match as match_regex
 from urllib.parse import urlencode
 
@@ -17,6 +19,8 @@ class SiteSelector(ResponseMicroService):
         # TODO: validate configuration format
         self.access_rules = config.get("access_rules", {})
         self.redirect_url = config.get("redirect_url", None)
+        self.primary_identifier = config.get("primary_identifier",
+                                             "edupersonprincipalname")
         self.access_rules_default = (self.access_rules.pop("", None)
                                      or self.access_rules.pop("default", None))
 
@@ -41,14 +45,22 @@ class SiteSelector(ResponseMicroService):
                 "rules": access_rules_for_service,
             }
             raise Error(error_context)
-        query_string = urlencode({
-            "user_id": internal_data.subject_id,
-            "displayname": (internal_data.attributes.get("displayname") or ["Unknown"])[0],
-            "timestamp": internal_data.auth_info.timestamp,
-            "issuer": internal_data.auth_info.issuer,
-            "service": service_id,
-            "session_id": context.state.session_id
-        })
+        context = {
+            "user_id": (internal_data.attributes.get(self.primary_identifier)
+                        or ["Unknown"])[0],
+            "displayname": (internal_data.attributes.get("displayname")
+                            or ["Unknown"])[0],
+            "timestamp":
+            internal_data.auth_info.timestamp,
+            "issuer":
+            internal_data.auth_info.issuer,
+            "service":
+            service_id,
+            "session_id":
+            context.state.session_id
+        }
+        query_string = urlencode(
+            {"context": base64.b64encode(json.dumps(context).encode("utf-8"))})
         return Redirect(self.redirect_url + f'?{query_string}')
 
 
