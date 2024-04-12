@@ -59,9 +59,12 @@ class SiteSelector(ResponseMicroService):
             "session_id":
             context.state.session_id
         }
-        query_string = urlencode(
-            {"context": base64.b64encode(json.dumps(context).encode("utf-8"))})
-        return Redirect(self.redirect_url + f'?{query_string}')
+        context_ser = json.dumps(payload, separators=(",", ":"))
+        context_ser_bytes = context_ser.encode("utf-8")
+        context_enc_bytes = base64.urlsafe_b64encode(context_ser_bytes)
+        context_enc = context_enc_bytes.decode("utf-8")
+        query_string = urlencode({"context": context_enc})
+        return Redirect(f"{self.redirect_url}?{query_string}")
 
 
 def evaluate_rule(rule, attributes):
