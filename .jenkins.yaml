@@ -1,0 +1,13 @@
+triggers:
+  cron: "@weekly"
+script:
+  - "python3.11 -m venv venv"
+  - ". venv/bin/activate"
+  - "pip install -U pip setuptools wheel build pytest"
+  - "pip install ."
+  - "pip freeze"
+  - "pytest ."
+  - "python3.11 -m build"
+publish_over_ssh:
+  - pypi.sunet.se
+clean_workspace: true
