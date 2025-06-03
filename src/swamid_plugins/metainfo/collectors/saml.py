@@ -1,6 +1,7 @@
-def collect_entity_metadata(mdstore, entity_id):
+def collect_entity_metadata(mdstore, entity_id, langs):
     metadata = {
-        "display_name": get_display_name(mdstore, entity_id),
+        "display_names": get_display_names_lang(mdstore, entity_id, langs),
+        "logo": get_logo(mdstore, entity_id),
         "privacy_statement": get_privacy_statement(mdstore, entity_id),
         "contacts": get_contacts(mdstore, entity_id),
         "entity_categories": get_entity_categories(mdstore, entity_id),
@@ -13,12 +14,26 @@ def collect_entity_metadata(mdstore, entity_id):
     return metadata
 
 
-def get_display_name(mdstore, entity_id):
-    display_name = (
-        next(mdstore.mdui_uiinfo_display_name(entity_id, langpref="en"), None)
-        or mdstore.name(entity_id)
-    )
-    return display_name
+def get_display_names_lang(mdstore, entity_id, langs=None):
+    uiinfos = mdstore.mdui_uiinfo(entity_id)
+    cls = "urn:oasis:names:tc:SAML:metadata:ui&DisplayName"
+    elements = list((
+        element
+        for uiinfo in uiinfos
+        for element_key, elements in uiinfo.items()
+        if element_key != "__class__"
+        for element in elements
+        if element.get("__class__") == cls
+    ))
+    list(map(lambda name: name.pop("__class__", None), elements))
+    elements = list(filter(lambda x: x["lang"] in langs, elements))
+    return elements
+
+
+def get_logo(mdstore, entity_id):
+    logos = list(mdstore.mdui_uiinfo_logo(entity_id))
+    list(map(lambda logo: logo.pop("__class__", None), logos))
+    return logos
 
 
 def get_privacy_statement(mdstore, entity_id):
@@ -57,6 +72,7 @@ def get_error_url(mdstore, entity_id):
     error_url = [
         idpsso['error_url']
         for idpsso in mdstore[entity_id].get('idpsso_descriptor', [])
+        if 'error_url' in idpsso
     ]
     return error_url
 

@@ -1,0 +1,6 @@
+module: swamid_plugins.metainfo.metainfo.MetaInfoIssuer
+name: MetaInfoIssuer
+config:
+  langs:
+    - en
+    - cz
