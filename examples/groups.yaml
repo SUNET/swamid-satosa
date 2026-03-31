@@ -1,0 +1,14 @@
+module: swamid_plugins.groups.GroupsFromSCIM
+name: GroupsFromSCIM
+config:
+  scim_base_url: "https://scim.example.com"
+
+  # GNAP auth server (sunet-auth-server)
+  gnap_auth_url: "https://auth.example.com/transaction"
+  gnap_client_key: "my-scim-client"
+  gnap_client_cert: "/path/to/client.crt"
+  gnap_client_key_file: "/path/to/client.key"
+  # gnap_access_type: "scim-api"
+
+  # user_id_attribute: "subject_id"
+  # groups_claim_name: "groups"
