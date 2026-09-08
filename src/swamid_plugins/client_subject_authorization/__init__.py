@@ -27,7 +27,16 @@ class ClientSubjectAuthorization(ResponseMicroService):
         if client_id not in allowed_subjects:
             return super().process(context, internal_data)
 
-        if internal_data.subject_id not in allowed_subjects[client_id]:
+        subjects = allowed_subjects[client_id]
+        if not isinstance(subjects, list) or not all(
+            isinstance(subject, str) for subject in subjects
+        ):
+            raise SATOSAAuthenticationError(
+                context.state,
+                "Subject authorization configuration is unavailable",
+            )
+
+        if internal_data.subject_id not in subjects:
             raise SATOSAAuthenticationError(
                 context.state,
                 "Subject is not authorized for this client",

@@ -74,3 +74,14 @@ class TestClientSubjectAuthorization(TestCase):
 
         with self.assertRaises(SATOSAAuthenticationError):
             self.plugin.process(self.context, data)
+
+    def test_configured_client_denies_invalid_subject_list(self):
+        with open(self.allowed_subjects_file, "w") as file:
+            json.dump({"protected-client": "allowed-subject"}, file)
+        data = InternalData(
+            requester="protected-client",
+            subject_id="allowed",
+        )
+
+        with self.assertRaises(SATOSAAuthenticationError):
+            self.plugin.process(self.context, data)

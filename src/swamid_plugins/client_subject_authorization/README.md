@@ -22,4 +22,4 @@ The referenced JSON file maps exact client IDs to exact subject identifiers:
 ```
 
 The file is read for every response so updates do not require restarting
-SATOSA. Missing or invalid configuration is denied for all clients.
+SATOSA. Authentication is denied if the file is missing or invalid.
