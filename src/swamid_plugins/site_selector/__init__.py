@@ -1,7 +1,11 @@
+import base64
+import json
 from re import match as match_regex
+from urllib.parse import urlencode
 
 from satosa.exception import SATOSAError
 from satosa.micro_services.base import ResponseMicroService
+from satosa.response import Redirect
 
 
 class Error(SATOSAError):
@@ -9,21 +13,21 @@ class Error(SATOSAError):
 
 
 class SiteSelector(ResponseMicroService):
+
     def __init__(self, config, *args, **kwargs):
         super().__init__(*args, **kwargs)
         # TODO: validate configuration format
         self.access_rules = config.get("access_rules", {})
-        self.access_rules_default = (
-            self.access_rules.pop("", None)
-            or self.access_rules.pop("default", None)
-        )
+        self.redirect_url = config.get("redirect_url", None)
+        self.primary_identifier = config.get("primary_identifier",
+                                             "edupersonprincipalname")
+        self.access_rules_default = (self.access_rules.pop("", None)
+                                     or self.access_rules.pop("default", None))
 
     def process(self, context, internal_data):
         service_id = internal_data.requester
-        access_rules_for_service = (
-            self.access_rules.get(service_id)
-            or self.access_rules_default
-        )
+        access_rules_for_service = (self.access_rules.get(service_id)
+                                    or self.access_rules_default)
 
         # evaluate each rule set for this particular service
         for rule in access_rules_for_service:
@@ -32,21 +36,40 @@ class SiteSelector(ResponseMicroService):
             if result:
                 return super().process(context, internal_data)
 
-        # no rule was successful; abort processing the response any further
-        error_context = {
-            "message": "Failed to satisfy any rule for accessing the service.",
-            "service": service_id,
-            "rules": access_rules_for_service,
+        # no rule was successful; either redirect or abort processing the response any further
+        if not self.redirect_url:
+            error_context = {
+                "message":
+                "Failed to satisfy any rule for accessing the service.",
+                "service": service_id,
+                "rules": access_rules_for_service,
+            }
+            raise Error(error_context)
+        context = {
+            "user_id": (internal_data.attributes.get(self.primary_identifier)
+                        or ["Unknown"])[0],
+            "displayname": (internal_data.attributes.get("displayname")
+                            or ["Unknown"])[0],
+            "timestamp":
+            internal_data.auth_info.timestamp,
+            "issuer":
+            internal_data.auth_info.issuer,
+            "service":
+            service_id,
+            "session_id":
+            context.state.session_id
         }
-        raise Error(error_context)
+        context_ser = json.dumps(payload, separators=(",", ":"))
+        context_ser_bytes = context_ser.encode("utf-8")
+        context_enc_bytes = base64.urlsafe_b64encode(context_ser_bytes)
+        context_enc = context_enc_bytes.decode("utf-8")
+        query_string = urlencode({"context": context_enc})
+        return Redirect(f"{self.redirect_url}?{query_string}")
 
 
 def evaluate_rule(rule, attributes):
     regex = rule["match"]
     attr = rule["attribute"]
     attr_values = attributes.get(attr, [])
-    satisfied = any(
-        match_regex(regex, v)
-        for v in attr_values
-    )
+    satisfied = any(match_regex(regex, v) for v in attr_values)
     return satisfied
