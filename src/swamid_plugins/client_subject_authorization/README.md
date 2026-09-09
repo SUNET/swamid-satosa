@@ -8,17 +8,14 @@ module: >-
   swamid_plugins.client_subject_authorization.ClientSubjectAuthorization
 name: ClientSubjectAuthorization
 config:
-  allowed_subjects_file: /etc/satosa/allowed-subjects.json
+  allowed_subjects_file: /etc/satosa/allowed-subjects.yaml
 ```
 
-The referenced JSON file maps exact client IDs to exact subject identifiers:
+The referenced YAML file maps exact client IDs to exact subject identifiers:
 
-```json
-{
-  "example_client_id": [
-    "user@example.org"
-  ]
-}
+```yaml
+example_client_id:
+  - user@example.org
 ```
 
 The file is read for every response so updates do not require restarting

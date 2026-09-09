@@ -1,7 +1,7 @@
-import json
 from tempfile import TemporaryDirectory
 from unittest import TestCase
 
+import yaml
 from satosa.context import Context
 from satosa.exception import SATOSAAuthenticationError
 from satosa.internal import InternalData
@@ -16,9 +16,9 @@ class TestClientSubjectAuthorization(TestCase):
     def setUp(self):
         self.temp_dir = TemporaryDirectory()
         self.addCleanup(self.temp_dir.cleanup)
-        self.allowed_subjects_file = f"{self.temp_dir.name}/allowed-subjects.json"
+        self.allowed_subjects_file = f"{self.temp_dir.name}/allowed-subjects.yaml"
         with open(self.allowed_subjects_file, "w") as file:
-            json.dump(
+            yaml.safe_dump(
                 {"protected-client": ["allowed-subject"]},
                 file,
             )
@@ -77,7 +77,7 @@ class TestClientSubjectAuthorization(TestCase):
 
     def test_configured_client_denies_invalid_subject_list(self):
         with open(self.allowed_subjects_file, "w") as file:
-            json.dump({"protected-client": "allowed-subject"}, file)
+            yaml.safe_dump({"protected-client": "allowed-subject"}, file)
         data = InternalData(
             requester="protected-client",
             subject_id="allowed",

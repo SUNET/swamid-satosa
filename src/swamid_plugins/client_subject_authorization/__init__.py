@@ -1,6 +1,6 @@
-import json
 from pathlib import Path
 
+import yaml
 from satosa.exception import SATOSAAuthenticationError
 from satosa.micro_services.base import ResponseMicroService
 
@@ -15,10 +15,10 @@ class ClientSubjectAuthorization(ResponseMicroService):
     def process(self, context, internal_data):
         client_id = internal_data.requester
         try:
-            allowed_subjects = json.loads(self.allowed_subjects_file.read_text())
+            allowed_subjects = yaml.safe_load(self.allowed_subjects_file.read_text())
             if not isinstance(allowed_subjects, dict):
                 raise TypeError
-        except (OSError, TypeError, json.JSONDecodeError):
+        except (OSError, TypeError, yaml.YAMLError):
             raise SATOSAAuthenticationError(
                 context.state,
                 "Subject authorization configuration is unavailable",
