@@ -8,7 +8,6 @@ from .collectors import collect_saml_entity_metadata
 
 import re
 
-
 KEY_STATE = "MetaInfoService"
 KEY_ISSUER_METADATA = "metadata_store"
 KEY_SAML_REQUESTER_METADATA = "metadata_store"
@@ -18,24 +17,26 @@ UUID4HEX = re.compile(
 )
 
 
-def is_oidc_client(entity_id):
+def is_oidc_client(entity_id, mdstore=None):
+    if mdstore:
+        return isinstance(mdstore, dict)
     result = entity_id.startswith("APP-") or bool(UUID4HEX.match(entity_id))
     return result
 
 
-def collect_entity_metadata(mdstore, metadata, entity_id):
+def collect_entity_metadata(mdstore, metadata, entity_id, langs):
     entity_metadata = (
         {}
         if not mdstore
-        else collect_oidc_entity_metadata(mdstore, entity_id)
-        if is_oidc_client(entity_id)
-        else collect_saml_entity_metadata(mdstore, entity_id)
+        else collect_oidc_entity_metadata(mdstore, entity_id, langs)
+        if is_oidc_client(entity_id, mdstore)
+        else collect_saml_entity_metadata(mdstore, entity_id, langs)
     )
     return entity_metadata
 
 
-def update_metadata_with_entity(mdstore, metadata, entity_id):
-    entity_metadata = collect_entity_metadata(mdstore, metadata, entity_id)
+def update_metadata_with_entity(mdstore, metadata, entity_id, langs=None):
+    entity_metadata = collect_entity_metadata(mdstore, metadata, entity_id, langs)
     updated_metadata = (
         {**metadata, entity_id: entity_metadata} if entity_metadata else metadata
     )
@@ -51,13 +52,14 @@ class _MetaInfoService:
         metadata = self.extract_metadata_state(context.state)
         entity_id = self.get_entity_id(internal_data)
         mdstore = self.get_metadata_store(context, entity_id)
-
+        langs = getattr(self, "langs")
         has_been_processed = entity_id in metadata
         metadata_new = (
             update_metadata_with_entity(
                 mdstore=mdstore,
                 metadata=metadata,
                 entity_id=entity_id,
+                langs=langs,
             )
             if not has_been_processed
             else metadata
@@ -111,6 +113,10 @@ class MetaInfoIssuer(_MetaInfoService, ResponseMicroService):
       name: MetaInfoIssuer
       ```
     """
+
+    def __init__(self, config, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.langs = config.get("langs", None)
 
     def extract_metadata_state(self, state):
         metadata = state.pop(KEY_STATE, {}).get("metadata", {})
